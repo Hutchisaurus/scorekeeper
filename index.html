@@ -16,7 +16,6 @@
         input:focus { outline: none; background-color: #f0f4ff !important; }
         @media screen and (max-width: 768px) { input { font-size: 16px !important; } }
         
-        /* Custom Toggle Switch */
         .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
         .switch input { opacity: 0; width: 0; height: 0; }
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #e2e8f0; transition: .4s; border-radius: 24px; }
@@ -26,19 +25,17 @@
     </style>
 </head>
 <body class="bg-slate-100 text-slate-900">
-    <div id="app" class="max-w-md mx-auto min-h-screen bg-white shadow-2xl">
-        <!-- App content injected here -->
-    </div>
+    <div id="app" class="max-w-md mx-auto min-h-screen bg-white shadow-2xl"></div>
 
     <script>
         const GAME_TEMPLATES = {
-            'Custom': { rounds: ['1','2','3','4','5','6','7','8','9','10'], unit: '', lowerIsBetter: false },
-            'Skull King': { rounds: ['1','2','3','4','5','6','7','8','9','10'], unit: 'pts', lowerIsBetter: false, complex: true },
-            '5 Crowns': { rounds: ['3','4','5','6','7','8','9','10','J','Q','K'], unit: 'pts', lowerIsBetter: true },
-            'Skyjo': { rounds: ['1','2','3','4','5','6','7','8','9','10'], unit: 'pts', lowerIsBetter: true },
-            'Quiddler': { rounds: ['3','4','5','6','7','8','9','10'], unit: 'pts', lowerIsBetter: false },
-            'Cover Your Assets': { rounds: ['R1','R2','R3','R4','R5','R6','R7','R8','R9','R10'], unit: '$', lowerIsBetter: false },
-            'Spinner': { rounds: ['9','8','7','6','5','4','3','2','1','0'], unit: 'pts', lowerIsBetter: true }
+            'Custom': { rounds: ['1','2','3','4','5','6','7','8','9','10'], unit: '', lowerIsBetter: false, startScore: 0 },
+            'Skull King': { rounds: ['1','2','3','4','5','6','7','8','9','10'], unit: 'pts', lowerIsBetter: false, complex: true, startScore: 0 },
+            '5 Crowns': { rounds: ['3','4','5','6','7','8','9','10','J','Q','K'], unit: 'pts', lowerIsBetter: true, startScore: 0 },
+            'Skyjo': { rounds: ['1','2','3','4','5','6','7','8','9','10'], unit: 'pts', lowerIsBetter: true, startScore: 0 },
+            'Quiddler': { rounds: ['3','4','5','6','7','8','9','10'], unit: 'pts', lowerIsBetter: false, startScore: 0 },
+            'Cover Your Assets': { rounds: ['R1','R2','R3','R4','R5','R6','R7','R8','R9','R10'], unit: '$', lowerIsBetter: false, startScore: 0 },
+            'Spinner': { rounds: ['9','8','7','6','5','4','3','2','1','0'], unit: 'pts', lowerIsBetter: true, startScore: 0 }
         };
 
         let state = JSON.parse(localStorage.getItem('scorekeeper_state')) || {
@@ -53,9 +50,12 @@
             localStorage.setItem('scorekeeper_state', JSON.stringify(state));
         }
 
-        function calculateSkullKingScore(bid, won, bonus, roundNum) {
-            const b = parseInt(bid) || 0;
-            const w = parseInt(won) || 0;
+        function calculateSkullKingScore(bid, won, bonus, roundNum, isRascal) {
+            // Only calculate if both Bid and Won have actual values
+            if (bid === '' || won === '') return 0;
+
+            const b = parseInt(bid);
+            const w = parseInt(won);
             const extra = parseInt(bonus) || 0;
             const round = parseInt(roundNum);
 
@@ -132,15 +132,16 @@
             } else {
                 const template = GAME_TEMPLATES[state.gameType];
                 
-                // Calculate totals
                 const totals = state.players.map((_, pIdx) => {
-                    return Object.entries(state.scores).reduce((sum, [rIdx, roundData]) => {
+                    const baseScore = template.startScore || 0;
+                    const accumulated = Object.entries(state.scores).reduce((sum, [rIdx, roundData]) => {
                         if (template.complex) {
-                            const data = roundData[pIdx] || { bid: 0, won: 0, bonus: 0 };
-                            return sum + calculateSkullKingScore(data.bid, data.won, data.bonus, template.rounds[rIdx]);
+                            const data = roundData[pIdx] || { bid: '', won: '', bonus: '' };
+                            return sum + calculateSkullKingScore(data.bid, data.won, data.bonus, template.rounds[rIdx], state.rascalScoring);
                         }
                         return sum + (parseInt(roundData[pIdx]) || 0);
                     }, 0);
+                    return baseScore + accumulated;
                 });
 
                 const leaderboard = state.players.map((name, i) => ({ name, score: totals[i] }))
@@ -152,7 +153,7 @@
                             <button onclick="confirmReset()" class="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center font-bold text-slate-400">↺</button>
                             <div class="text-center">
                                 <h2 class="font-black uppercase text-sm tracking-tight">${state.gameType}</h2>
-                                <p class="text-[9px] font-bold text-green-500 uppercase tracking-widest">${state.rascalScoring ? 'Rascal Rules' : 'Standard Rules'}</p>
+                                <p class="text-[9px] font-bold text-green-500 uppercase tracking-widest">${state.gameType === 'Skull King' ? (state.rascalScoring ? 'Rascal Rules' : 'Standard Rules') : 'Live Game'}</p>
                             </div>
                             <div class="w-10"></div>
                         </header>
@@ -271,7 +272,8 @@
         };
 
         window.updateComplexScore = (rIdx, pIdx, field, val) => {
-            if (!state.scores[rIdx][pIdx]) state.scores[rIdx][pIdx] = { bid: 0, won: 0, bonus: 0 };
+            if (!state.scores[rIdx]) state.scores[rIdx] = {};
+            if (!state.scores[rIdx][pIdx]) state.scores[rIdx][pIdx] = { bid: '', won: '', bonus: '' };
             state.scores[rIdx][pIdx][field] = val;
             saveState();
             clearTimeout(window.rT);
