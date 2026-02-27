@@ -14,8 +14,15 @@
         input[type="number"]::-webkit-inner-spin-button,
         input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
         input:focus { outline: none; background-color: #f0f4ff !important; }
-        /* Prevent zooming on focus in iOS */
         @media screen and (max-width: 768px) { input { font-size: 16px !important; } }
+        
+        /* Custom Toggle Switch */
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #e2e8f0; transition: .4s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #4f46e5; }
+        input:checked + .slider:before { transform: translateX(20px); }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-900">
@@ -26,7 +33,7 @@
     <script>
         const GAME_TEMPLATES = {
             'Custom': { rounds: ['1','2','3','4','5','6','7','8','9','10'], unit: '', lowerIsBetter: false },
-            'Skull King': { rounds: ['1','2','3','4','5','6','7','8','9','10'], unit: 'pts', lowerIsBetter: false },
+            'Skull King': { rounds: ['1','2','3','4','5','6','7','8','9','10'], unit: 'pts', lowerIsBetter: false, complex: true },
             '5 Crowns': { rounds: ['3','4','5','6','7','8','9','10','J','Q','K'], unit: 'pts', lowerIsBetter: true },
             'Skyjo': { rounds: ['1','2','3','4','5','6','7','8','9','10'], unit: 'pts', lowerIsBetter: true },
             'Quiddler': { rounds: ['3','4','5','6','7','8','9','10'], unit: 'pts', lowerIsBetter: false },
@@ -34,23 +41,44 @@
             'Spinner': { rounds: ['9','8','7','6','5','4','3','2','1','0'], unit: 'pts', lowerIsBetter: true }
         };
 
-        // Persistent State Management
         let state = JSON.parse(localStorage.getItem('scorekeeper_state')) || {
             view: 'setup',
             gameType: 'Custom',
             players: ['Player 1', 'Player 2'],
-            scores: {}
+            scores: {},
+            rascalScoring: false
         };
 
         function saveState() {
             localStorage.setItem('scorekeeper_state', JSON.stringify(state));
         }
 
+        function calculateSkullKingScore(bid, won, bonus, roundNum) {
+            const b = parseInt(bid) || 0;
+            const w = parseInt(won) || 0;
+            const extra = parseInt(bonus) || 0;
+            const round = parseInt(roundNum);
+
+            if (b === 0) {
+                if (w === 0) {
+                    return (round * 10) + extra;
+                } else {
+                    return (round * -10);
+                }
+            } else {
+                if (b === w) {
+                    return (w * 20) + extra;
+                } else {
+                    return Math.abs(b - w) * -10;
+                }
+            }
+        }
+
         function render() {
             const root = document.getElementById('app');
             if (state.view === 'setup') {
                 root.innerHTML = `
-                    <div class="min-h-screen p-6 space-y-8 animate-in fade-in duration-500">
+                    <div class="min-h-screen p-6 space-y-8">
                         <div class="bg-indigo-600 -mx-6 -mt-6 p-10 text-white text-center rounded-b-[3rem] shadow-lg">
                             <h1 class="text-4xl font-black italic tracking-tighter">GAME NIGHT</h1>
                             <p class="text-[10px] font-bold uppercase tracking-[0.3em] opacity-70">Portable Scorekeeper</p>
@@ -66,6 +94,19 @@
                                 `).join('')}
                             </div>
                         </section>
+
+                        ${state.gameType === 'Skull King' ? `
+                            <section class="bg-slate-50 p-4 rounded-2xl flex items-center justify-between border border-slate-100">
+                                <div>
+                                    <h4 class="font-bold text-sm">Rascal Scoring</h4>
+                                    <p class="text-[10px] text-slate-500 italic">0-bid correct = 10 pts per round</p>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" ${state.rascalScoring ? 'checked' : ''} onchange="toggleRascal(this.checked)">
+                                    <span class="slider"></span>
+                                </label>
+                            </section>
+                        ` : ''}
 
                         <section>
                             <h3 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Players (${state.players.length}/8)</h3>
@@ -90,17 +131,28 @@
                 `;
             } else {
                 const template = GAME_TEMPLATES[state.gameType];
-                const totals = state.players.map((_, pIdx) => Object.values(state.scores).reduce((s, r) => s + (parseInt(r[pIdx]) || 0), 0));
+                
+                // Calculate totals
+                const totals = state.players.map((_, pIdx) => {
+                    return Object.entries(state.scores).reduce((sum, [rIdx, roundData]) => {
+                        if (template.complex) {
+                            const data = roundData[pIdx] || { bid: 0, won: 0, bonus: 0 };
+                            return sum + calculateSkullKingScore(data.bid, data.won, data.bonus, template.rounds[rIdx]);
+                        }
+                        return sum + (parseInt(roundData[pIdx]) || 0);
+                    }, 0);
+                });
+
                 const leaderboard = state.players.map((name, i) => ({ name, score: totals[i] }))
                     .sort((a, b) => template.lowerIsBetter ? a.score - b.score : b.score - a.score);
 
                 root.innerHTML = `
-                    <div class="min-h-screen flex flex-col animate-in slide-in-from-right duration-300">
+                    <div class="min-h-screen flex flex-col bg-white">
                         <header class="sticky top-0 z-50 bg-white/90 backdrop-blur-md px-6 py-4 border-b border-slate-100 flex justify-between items-center">
                             <button onclick="confirmReset()" class="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center font-bold text-slate-400">↺</button>
                             <div class="text-center">
                                 <h2 class="font-black uppercase text-sm tracking-tight">${state.gameType}</h2>
-                                <p class="text-[9px] font-bold text-green-500 uppercase tracking-widest">In Progress</p>
+                                <p class="text-[9px] font-bold text-green-500 uppercase tracking-widest">${state.rascalScoring ? 'Rascal Rules' : 'Standard Rules'}</p>
                             </div>
                             <div class="w-10"></div>
                         </header>
@@ -110,9 +162,9 @@
                                 <tr class="bg-slate-50">
                                     <th class="p-4 text-left text-[9px] font-black text-slate-300 uppercase sticky left-0 bg-slate-50 z-10">Rnd</th>
                                     ${state.players.map((name, i) => `
-                                        <th class="p-4 text-center min-w-[100px]">
+                                        <th class="p-4 text-center min-w-[120px]">
                                             <div class="text-[9px] font-black text-slate-400 uppercase truncate">${name}</div>
-                                            <div class="text-indigo-600 text-lg font-black">${template.unit}${totals[i]}</div>
+                                            <div class="text-indigo-600 text-lg font-black">${totals[i]}</div>
                                         </th>
                                     `).join('')}
                                 </tr>
@@ -121,9 +173,34 @@
                                         <td class="p-4 text-xs font-black text-slate-200 sticky left-0 bg-white z-10">${label}</td>
                                         ${state.players.map((_, pIdx) => `
                                             <td class="p-2">
-                                                <input type="number" inputmode="numeric" value="${state.scores[rIdx]?.[pIdx] || ''}" 
-                                                    oninput="updateScore(${rIdx}, ${pIdx}, this.value)"
-                                                    class="w-full text-center py-4 rounded-2xl bg-slate-50 font-black text-xl text-slate-800 focus:bg-indigo-50" placeholder="0">
+                                                ${template.complex ? `
+                                                    <div class="space-y-1">
+                                                        <div class="flex gap-1">
+                                                            <div class="flex-1">
+                                                                <p class="text-[8px] uppercase font-bold text-slate-400 text-center">Bid</p>
+                                                                <input type="number" value="${state.scores[rIdx]?.[pIdx]?.bid ?? ''}" 
+                                                                    oninput="updateComplexScore(${rIdx}, ${pIdx}, 'bid', this.value)"
+                                                                    class="w-full text-center py-2 rounded-lg bg-slate-50 font-bold text-sm text-slate-800">
+                                                            </div>
+                                                            <div class="flex-1">
+                                                                <p class="text-[8px] uppercase font-bold text-slate-400 text-center">Won</p>
+                                                                <input type="number" value="${state.scores[rIdx]?.[pIdx]?.won ?? ''}" 
+                                                                    oninput="updateComplexScore(${rIdx}, ${pIdx}, 'won', this.value)"
+                                                                    class="w-full text-center py-2 rounded-lg bg-slate-50 font-bold text-sm text-slate-800">
+                                                            </div>
+                                                        </div>
+                                                        <div class="w-full">
+                                                            <p class="text-[8px] uppercase font-bold text-slate-400 text-center">Bonus</p>
+                                                            <input type="number" value="${state.scores[rIdx]?.[pIdx]?.bonus ?? ''}" 
+                                                                oninput="updateComplexScore(${rIdx}, ${pIdx}, 'bonus', this.value)"
+                                                                class="w-full text-center py-1.5 rounded-lg bg-slate-100/50 font-bold text-[10px] text-slate-500">
+                                                        </div>
+                                                    </div>
+                                                ` : `
+                                                    <input type="number" inputmode="numeric" value="${state.scores[rIdx]?.[pIdx] || ''}" 
+                                                        oninput="updateScore(${rIdx}, ${pIdx}, this.value)"
+                                                        class="w-full text-center py-4 rounded-2xl bg-slate-50 font-black text-xl text-slate-800 focus:bg-indigo-50" placeholder="0">
+                                                `}
                                             </td>
                                         `).join('')}
                                     </tr>
@@ -139,7 +216,7 @@
                                         <span class="text-xl font-black italic opacity-30">#${rank + 1}</span>
                                         <span class="font-bold uppercase tracking-tight text-sm">${p.name}</span>
                                     </div>
-                                    <span class="text-xl font-black">${template.unit}${p.score}</span>
+                                    <span class="text-xl font-black">${p.score}</span>
                                 </div>
                             `).join('')}
                         </div>
@@ -149,6 +226,7 @@
         }
 
         window.setGameType = (t) => { state.gameType = t; saveState(); render(); };
+        window.toggleRascal = (val) => { state.rascalScoring = val; saveState(); render(); };
         window.setView = (v) => { state.view = v; saveState(); render(); };
         
         window.addPlayer = () => {
@@ -188,7 +266,14 @@
         window.updateScore = (rIdx, pIdx, val) => {
             state.scores[rIdx][pIdx] = val;
             saveState();
-            // Debounce the heavy UI re-render
+            clearTimeout(window.rT);
+            window.rT = setTimeout(render, 1200);
+        };
+
+        window.updateComplexScore = (rIdx, pIdx, field, val) => {
+            if (!state.scores[rIdx][pIdx]) state.scores[rIdx][pIdx] = { bid: 0, won: 0, bonus: 0 };
+            state.scores[rIdx][pIdx][field] = val;
+            saveState();
             clearTimeout(window.rT);
             window.rT = setTimeout(render, 1200);
         };
