@@ -52,13 +52,6 @@
 
         /**
          * SKULL KING CALCULATION LOGIC
-         * Standard: 0 bid correct = Round * 10. Bonus is always added.
-         * Rascal: 
-         * - Success/Fail logic same as standard.
-         * - Bonus Calculation:
-         * - if won == bid: bonus * 1.0
-         * - if won == bid +/- 1: bonus * 0.5
-         * - if won == bid +/- 2+: bonus * 0.0
          */
         function calculateSkullKingScore(bid, won, bonus, roundLabel, isRascal) {
             if (bid === '' || won === '') return 0;
@@ -68,41 +61,42 @@
             const rawBonus = parseInt(bonus) || 0;
             const roundNumber = parseInt(roundLabel) || 1;
 
-            let baseScore = 0;
-            let appliedBonus = 0;
-
-            // 1. Calculate Base Round Score
-            if (b === 0) {
-                if (w === 0) {
-                    baseScore = (roundNumber * 10);
-                } else {
-                    baseScore = (roundNumber * -10);
-                }
-            } else {
-                if (b === w) {
-                    baseScore = (b * 20);
-                } else {
-                    baseScore = Math.abs(b - w) * -10;
-                }
-            }
-
-            // 2. Calculate Rascal Bonus Multiplier
             if (isRascal) {
+                // RASCAL SCORING RULES
+                // Potential Points = 10 * Number of cards (roundNumber)
+                const potentialPoints = roundNumber * 10;
                 const diff = Math.abs(b - w);
+
                 if (diff === 0) {
-                    appliedBonus = rawBonus; // 100%
+                    // Direct Hit
+                    return potentialPoints + rawBonus;
                 } else if (diff === 1) {
-                    appliedBonus = rawBonus * 0.5; // 50%
+                    // Glancing Blow
+                    return (potentialPoints * 0.5) + (rawBonus * 0.5);
                 } else {
-                    appliedBonus = 0; // 0%
+                    // Complete Miss
+                    return 0;
                 }
             } else {
-                // Standard: Bonus is always added if points are earned (or just always added as per standard house rules)
-                // We'll treat standard as 100% bonus if the bid wasn't failed, or simply always 100% for house consistency.
-                appliedBonus = rawBonus;
+                // STANDARD SCORING RULES
+                let baseScore = 0;
+                if (b === 0) {
+                    if (w === 0) {
+                        baseScore = (roundNumber * 10);
+                    } else {
+                        baseScore = (roundNumber * -10);
+                    }
+                } else {
+                    if (b === w) {
+                        baseScore = (b * 20);
+                    } else {
+                        baseScore = Math.abs(b - w) * -10;
+                    }
+                }
+                // Standard: Bonus is always added if specified (usually only if bid is made, but house rules vary)
+                // To keep it simple and flexible for the user, we add the full bonus entered.
+                return baseScore + rawBonus;
             }
-            
-            return baseScore + appliedBonus;
         }
 
         function render() {
@@ -130,7 +124,7 @@
                             <section class="bg-slate-50 p-4 rounded-2xl flex items-center justify-between border border-slate-100">
                                 <div>
                                     <h4 class="font-bold text-sm">Rascal Scoring</h4>
-                                    <p class="text-[10px] text-slate-500 italic">Bonuses scaled by bid accuracy (100% / 50% / 0%)</p>
+                                    <p class="text-[10px] text-slate-500 italic">Accuracy based: Direct Hit (100%), Glancing (50%), Miss (0%)</p>
                                 </div>
                                 <label class="switch">
                                     <input type="checkbox" ${state.rascalScoring ? 'checked' : ''} onchange="toggleRascal(this.checked)">
@@ -304,7 +298,7 @@
             state.scores[rIdx][pIdx] = val;
             saveState();
             clearTimeout(window.rT);
-            window.rT = setTimeout(render, 500); 
+            window.rT = setTimeout(render, 300); 
         };
 
         window.updateComplexScore = (rIdx, pIdx, field, val) => {
@@ -313,7 +307,7 @@
             state.scores[rIdx][pIdx][field] = val;
             saveState();
             clearTimeout(window.rT);
-            window.rT = setTimeout(render, 500);
+            window.rT = setTimeout(render, 300);
         };
 
         render();
