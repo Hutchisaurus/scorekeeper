@@ -34,7 +34,7 @@
             '5 Crowns': { rounds: ['3','4','5','6','7','8','9','10','J','Q','K'], unit: 'pts', lowerIsBetter: true, startScore: 0 },
             'Skyjo': { rounds: ['1','2','3','4','5','6','7','8','9','10'], unit: 'pts', lowerIsBetter: true, startScore: 0 },
             'Quiddler': { rounds: ['3','4','5','6','7','8','9','10'], unit: 'pts', lowerIsBetter: false, startScore: 0 },
-            'Cover Your Assets': { rounds: ['R1','R2','R3','R4','R5','R6','R7','R8','R9','R10'], unit: '$', lowerIsBetter: false, startScore: 0 },
+            'Cover Your Assets': { rounds: ['R1','R2','R3','R4','R5','R6','R7','R8','R9','R10'], unit: '$', lowerIsBetter: false, startScore: 0, multiplier: 1000 },
             'Spinner': { rounds: ['9','8','7','6','5','4','3','2','1','0'], unit: 'pts', lowerIsBetter: true, startScore: 0 }
         };
 
@@ -62,23 +62,17 @@
             const roundNumber = parseInt(roundLabel) || 1;
 
             if (isRascal) {
-                // RASCAL SCORING RULES
-                // Potential Points = 10 * Number of cards (roundNumber)
                 const potentialPoints = roundNumber * 10;
                 const diff = Math.abs(b - w);
 
                 if (diff === 0) {
-                    // Direct Hit
                     return potentialPoints + rawBonus;
                 } else if (diff === 1) {
-                    // Glancing Blow
                     return (potentialPoints * 0.5) + (rawBonus * 0.5);
                 } else {
-                    // Complete Miss
                     return 0;
                 }
             } else {
-                // STANDARD SCORING RULES
                 let baseScore = 0;
                 if (b === 0) {
                     if (w === 0) {
@@ -93,8 +87,6 @@
                         baseScore = Math.abs(b - w) * -10;
                     }
                 }
-                // Standard: Bonus is always added if specified (usually only if bid is made, but house rules vary)
-                // To keep it simple and flexible for the user, we add the full bonus entered.
                 return baseScore + rawBonus;
             }
         }
@@ -168,7 +160,9 @@
                             const data = roundData[pIdx] || { bid: '', won: '', bonus: '' };
                             return sum + calculateSkullKingScore(data.bid, data.won, data.bonus, template.rounds[rIdx], state.rascalScoring);
                         }
-                        return sum + (parseInt(roundData[pIdx]) || 0);
+                        const rawVal = parseInt(roundData[pIdx]) || 0;
+                        const multipliedVal = rawVal * (template.multiplier || 1);
+                        return sum + multipliedVal;
                     }, 0);
                     return baseScore + accumulated;
                 });
@@ -182,7 +176,9 @@
                             <button onclick="confirmReset()" class="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center font-bold text-slate-400">↺</button>
                             <div class="text-center">
                                 <h2 class="font-black uppercase text-sm tracking-tight">${state.gameType}</h2>
-                                <p class="text-[9px] font-bold text-green-500 uppercase tracking-widest">${state.gameType === 'Skull King' ? (state.rascalScoring ? 'Rascal Rules' : 'Standard Rules') : 'Live Game'}</p>
+                                <p class="text-[9px] font-bold text-green-500 uppercase tracking-widest">
+                                    ${state.gameType === 'Cover Your Assets' ? 'Scores in Thousands' : (state.gameType === 'Skull King' ? (state.rascalScoring ? 'Rascal Rules' : 'Standard Rules') : 'Live Game')}
+                                </p>
                             </div>
                             <div class="w-10"></div>
                         </header>
@@ -194,7 +190,7 @@
                                     ${state.players.map((name, i) => `
                                         <th class="p-4 text-center min-w-[120px]">
                                             <div class="text-[9px] font-black text-slate-400 uppercase truncate">${name}</div>
-                                            <div class="text-indigo-600 text-lg font-black">${totals[i]}</div>
+                                            <div class="text-indigo-600 text-lg font-black">${template.unit}${totals[i].toLocaleString()}</div>
                                         </th>
                                     `).join('')}
                                 </tr>
@@ -227,9 +223,12 @@
                                                         </div>
                                                     </div>
                                                 ` : `
-                                                    <input type="number" inputmode="numeric" value="${state.scores[rIdx]?.[pIdx] || ''}" 
-                                                        oninput="updateScore(${rIdx}, ${pIdx}, this.value)"
-                                                        class="w-full text-center py-4 rounded-2xl bg-slate-50 font-black text-xl text-slate-800 focus:bg-indigo-50" placeholder="0">
+                                                    <div class="relative">
+                                                        <input type="number" inputmode="numeric" value="${state.scores[rIdx]?.[pIdx] || ''}" 
+                                                            oninput="updateScore(${rIdx}, ${pIdx}, this.value)"
+                                                            class="w-full text-center py-4 rounded-2xl bg-slate-50 font-black text-xl text-slate-800 focus:bg-indigo-50" placeholder="0">
+                                                        ${template.multiplier ? `<span class="absolute right-3 bottom-1 text-[8px] font-bold text-slate-300">k</span>` : ''}
+                                                    </div>
                                                 `}
                                             </td>
                                         `).join('')}
@@ -246,7 +245,7 @@
                                         <span class="text-xl font-black italic opacity-30">#${rank + 1}</span>
                                         <span class="font-bold uppercase tracking-tight text-sm">${p.name}</span>
                                     </div>
-                                    <span class="text-xl font-black">${p.score}</span>
+                                    <span class="text-xl font-black">${template.unit}${p.score.toLocaleString()}</span>
                                 </div>
                             `).join('')}
                         </div>
