@@ -38,11 +38,10 @@
             'Spinner': { rounds: ['9','8','7','6','5','4','3','2','1','0'], unit: 'pts', lowerIsBetter: true, startScore: 0 }
         };
 
-        // Initialize state with an empty player list
         let state = JSON.parse(localStorage.getItem('scorekeeper_state')) || {
             view: 'setup',
             gameType: 'Custom',
-            players: [], // Changed from ['Player 1', 'Player 2'] to empty array
+            players: [],
             scores: {},
             rascalScoring: false
         };
@@ -51,27 +50,59 @@
             localStorage.setItem('scorekeeper_state', JSON.stringify(state));
         }
 
-        function calculateSkullKingScore(bid, won, bonus, roundNum, isRascal) {
+        /**
+         * SKULL KING CALCULATION LOGIC
+         * Standard: 0 bid correct = Round * 10. Bonus is always added.
+         * Rascal: 
+         * - Success/Fail logic same as standard.
+         * - Bonus Calculation:
+         * - if won == bid: bonus * 1.0
+         * - if won == bid +/- 1: bonus * 0.5
+         * - if won == bid +/- 2+: bonus * 0.0
+         */
+        function calculateSkullKingScore(bid, won, bonus, roundLabel, isRascal) {
             if (bid === '' || won === '') return 0;
 
             const b = parseInt(bid);
             const w = parseInt(won);
-            const extra = parseInt(bonus) || 0;
-            const round = parseInt(roundNum);
+            const rawBonus = parseInt(bonus) || 0;
+            const roundNumber = parseInt(roundLabel) || 1;
 
+            let baseScore = 0;
+            let appliedBonus = 0;
+
+            // 1. Calculate Base Round Score
             if (b === 0) {
                 if (w === 0) {
-                    return (round * 10) + extra;
+                    baseScore = (roundNumber * 10);
                 } else {
-                    return (round * -10);
+                    baseScore = (roundNumber * -10);
                 }
             } else {
                 if (b === w) {
-                    return (w * 20) + extra;
+                    baseScore = (b * 20);
                 } else {
-                    return Math.abs(b - w) * -10;
+                    baseScore = Math.abs(b - w) * -10;
                 }
             }
+
+            // 2. Calculate Rascal Bonus Multiplier
+            if (isRascal) {
+                const diff = Math.abs(b - w);
+                if (diff === 0) {
+                    appliedBonus = rawBonus; // 100%
+                } else if (diff === 1) {
+                    appliedBonus = rawBonus * 0.5; // 50%
+                } else {
+                    appliedBonus = 0; // 0%
+                }
+            } else {
+                // Standard: Bonus is always added if points are earned (or just always added as per standard house rules)
+                // We'll treat standard as 100% bonus if the bid wasn't failed, or simply always 100% for house consistency.
+                appliedBonus = rawBonus;
+            }
+            
+            return baseScore + appliedBonus;
         }
 
         function render() {
@@ -99,7 +130,7 @@
                             <section class="bg-slate-50 p-4 rounded-2xl flex items-center justify-between border border-slate-100">
                                 <div>
                                     <h4 class="font-bold text-sm">Rascal Scoring</h4>
-                                    <p class="text-[10px] text-slate-500 italic">0-bid correct = 10 pts per round</p>
+                                    <p class="text-[10px] text-slate-500 italic">Bonuses scaled by bid accuracy (100% / 50% / 0%)</p>
                                 </div>
                                 <label class="switch">
                                     <input type="checkbox" ${state.rascalScoring ? 'checked' : ''} onchange="toggleRascal(this.checked)">
@@ -273,7 +304,7 @@
             state.scores[rIdx][pIdx] = val;
             saveState();
             clearTimeout(window.rT);
-            window.rT = setTimeout(render, 1200);
+            window.rT = setTimeout(render, 500); 
         };
 
         window.updateComplexScore = (rIdx, pIdx, field, val) => {
@@ -282,7 +313,7 @@
             state.scores[rIdx][pIdx][field] = val;
             saveState();
             clearTimeout(window.rT);
-            window.rT = setTimeout(render, 1200);
+            window.rT = setTimeout(render, 500);
         };
 
         render();
