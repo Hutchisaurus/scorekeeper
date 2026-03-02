@@ -30,6 +30,7 @@
     <script>
         const GAME_TEMPLATES = {
             'Custom': { rounds: ['1','2','3','4','5','6','7','8','9','10'], unit: '', lowerIsBetter: false, startScore: 0 },
+            'Carcassonne': { rounds: ['Log 1','Log 2','Log 3','Log 4','Log 5','Log 6','Log 7','Log 8','Final Scoring'], unit: 'pts', lowerIsBetter: false, startScore: 0 },
             'Skull King': { rounds: ['1','2','3','4','5','6','7','8','9','10'], unit: 'pts', lowerIsBetter: false, complex: true, startScore: 0 },
             '5 Crowns': { rounds: ['3','4','5','6','7','8','9','10','J','Q','K'], unit: 'pts', lowerIsBetter: true, startScore: 0 },
             'Skyjo': { rounds: ['1','2','3','4','5','6','7','8','9','10'], unit: 'pts', lowerIsBetter: true, startScore: 0 },
@@ -50,12 +51,8 @@
             localStorage.setItem('scorekeeper_state', JSON.stringify(state));
         }
 
-        /**
-         * SKULL KING CALCULATION LOGIC
-         */
         function calculateSkullKingScore(bid, won, bonus, roundLabel, isRascal) {
             if (bid === '' || won === '') return 0;
-
             const b = parseInt(bid);
             const w = parseInt(won);
             const rawBonus = parseInt(bonus) || 0;
@@ -64,28 +61,15 @@
             if (isRascal) {
                 const potentialPoints = roundNumber * 10;
                 const diff = Math.abs(b - w);
-
-                if (diff === 0) {
-                    return potentialPoints + rawBonus;
-                } else if (diff === 1) {
-                    return (potentialPoints * 0.5) + (rawBonus * 0.5);
-                } else {
-                    return 0;
-                }
+                if (diff === 0) return potentialPoints + rawBonus;
+                else if (diff === 1) return (potentialPoints * 0.5) + (rawBonus * 0.5);
+                else return 0;
             } else {
                 let baseScore = 0;
                 if (b === 0) {
-                    if (w === 0) {
-                        baseScore = (roundNumber * 10);
-                    } else {
-                        baseScore = (roundNumber * -10);
-                    }
+                    baseScore = (w === 0) ? (roundNumber * 10) : (roundNumber * -10);
                 } else {
-                    if (b === w) {
-                        baseScore = (b * 20);
-                    } else {
-                        baseScore = Math.abs(b - w) * -10;
-                    }
+                    baseScore = (b === w) ? (b * 20) : (Math.abs(b - w) * -10);
                 }
                 return baseScore + rawBonus;
             }
@@ -152,7 +136,6 @@
                 `;
             } else {
                 const template = GAME_TEMPLATES[state.gameType];
-                
                 const totals = state.players.map((_, pIdx) => {
                     const baseScore = template.startScore || 0;
                     const accumulated = Object.entries(state.scores).reduce((sum, [rIdx, roundData]) => {
@@ -177,7 +160,7 @@
                             <div class="text-center">
                                 <h2 class="font-black uppercase text-sm tracking-tight">${state.gameType}</h2>
                                 <p class="text-[9px] font-bold text-green-500 uppercase tracking-widest">
-                                    ${state.gameType === 'Cover Your Assets' ? 'Scores in Thousands' : (state.gameType === 'Skull King' ? (state.rascalScoring ? 'Rascal Rules' : 'Standard Rules') : 'Live Game')}
+                                    ${state.gameType === 'Cover Your Assets' ? 'Enter left of comma (x1000)' : 'Live Scoreboard'}
                                 </p>
                             </div>
                             <div class="w-10"></div>
@@ -196,7 +179,10 @@
                                 </tr>
                                 ${template.rounds.map((label, rIdx) => `
                                     <tr class="border-b border-slate-50">
-                                        <td class="p-4 text-xs font-black text-slate-200 sticky left-0 bg-white z-10">${label}</td>
+                                        <td class="p-4 text-xs font-black text-slate-400 sticky left-0 bg-white z-10 leading-none">
+                                            ${label}
+                                            ${label === 'Final Scoring' ? '<br><span class="text-[8px] text-indigo-400">Farmers/Etc</span>' : ''}
+                                        </td>
                                         ${state.players.map((_, pIdx) => `
                                             <td class="p-2">
                                                 ${template.complex ? `
@@ -256,8 +242,6 @@
 
         window.setGameType = (t) => { state.gameType = t; saveState(); render(); };
         window.toggleRascal = (val) => { state.rascalScoring = val; saveState(); render(); };
-        window.setView = (v) => { state.view = v; saveState(); render(); };
-        
         window.addPlayer = () => {
             const input = document.getElementById('pInput');
             if (input.value.trim() && state.players.length < 8) {
@@ -267,13 +251,7 @@
                 render();
             }
         };
-
-        window.removePlayer = (idx) => { 
-            state.players.splice(idx, 1); 
-            saveState();
-            render(); 
-        };
-
+        window.removePlayer = (idx) => { state.players.splice(idx, 1); saveState(); render(); };
         window.startGame = () => {
             if (state.players.length === 0) return;
             state.scores = {};
@@ -283,7 +261,6 @@
             render();
             window.scrollTo(0, 0);
         };
-
         window.confirmReset = () => {
             if (confirm("End match and return to setup? Current scores will be cleared.")) {
                 state.view = 'setup';
@@ -292,14 +269,12 @@
                 render();
             }
         };
-
         window.updateScore = (rIdx, pIdx, val) => {
             state.scores[rIdx][pIdx] = val;
             saveState();
             clearTimeout(window.rT);
             window.rT = setTimeout(render, 300); 
         };
-
         window.updateComplexScore = (rIdx, pIdx, field, val) => {
             if (!state.scores[rIdx]) state.scores[rIdx] = {};
             if (!state.scores[rIdx][pIdx]) state.scores[rIdx][pIdx] = { bid: '', won: '', bonus: '' };
