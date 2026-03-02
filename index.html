@@ -188,11 +188,22 @@
         }
 
         window.openTTRModal = (pIdx) => {
-            state.modalOpen = true; state.modalPlayerIdx = pIdx; state.currentModalType = 'route'; render(); setTTRModalType('route');
+            state.modalOpen = true; 
+            state.modalPlayerIdx = pIdx; 
+            state.currentModalType = 'route'; 
+            render(); 
+            setTTRModalType('route');
         };
 
         window.setTTRModalType = (type) => {
             state.currentModalType = type;
+            
+            // Update Tab Highlights manually to avoid full re-render flickering
+            document.querySelectorAll('.ttr-type-btn').forEach(btn => {
+                const isSelected = btn.id === `ttr-btn-${type}`;
+                btn.className = `ttr-type-btn p-3 rounded-2xl border-2 font-black text-[10px] uppercase transition-all ${isSelected ? 'bg-amber-600 border-amber-600 text-white' : 'bg-slate-50 border-transparent text-slate-400'}`;
+            });
+
             const container = document.getElementById('ttr-inputs');
             if (type === 'route') {
                 container.innerHTML = `<label class="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-3">Select Route Length</label><div class="grid grid-cols-3 gap-3">${Object.keys(TTR_ROUTE_POINTS).map(len => `<button onclick="window.ttrLen=${len}; selectTTRLen(this)" class="len-btn p-4 rounded-2xl bg-slate-100 font-black text-xl border-2 border-transparent focus:border-amber-500 focus:bg-amber-50">${len}</button>`).join('')}</div>`;
@@ -230,7 +241,13 @@
         }
 
         window.openCarcModal = (pIdx) => { state.modalOpen = true; state.modalPlayerIdx = pIdx; state.currentModalType = 'road'; render(); };
-        window.setCarcModalType = (t) => { state.currentModalType = t; render(); };
+        window.setCarcModalType = (t) => {
+            state.currentModalType = t;
+            document.querySelectorAll('.type-btn').forEach(btn => {
+                const isSelected = btn.id === `btn-${t}`;
+                btn.className = `type-btn p-3 rounded-2xl border-2 font-bold text-xs ${isSelected ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-50 text-slate-400 border-transparent'}`;
+            });
+        };
         window.submitCarcScore = () => {
             const type = state.currentModalType; const t = parseInt(document.getElementById('modal-tiles').value) || 0; const b = parseInt(document.getElementById('modal-banners').value) || 0;
             let pts = 0; if (type === 'road') pts = t; if (type === 'city') pts = (t*2 + b*2); if (type === 'monastery') pts = 9; if (type === 'farmer') pts = t*3;
